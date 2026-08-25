@@ -1,446 +1,586 @@
 import streamlit as st
-import pyrebase
-
+import requests
+import firebase_admin
+from firebase_admin import auth as firebase_auth
 from firebase_config import db
-from datetime import datetime
 
 
+# ============================================================
+# FIREBASE WEB API KEY
+# ============================================================
+# Get this from:
+# Firebase Console
+# → Project Settings
+# → General
+# → Your apps
+# → Web API Key
+#
+# IMPORTANT:
+# This is NOT the private_key from firebase_key.json.
 
-# ==================================================
-# Firebase Configuration
-# ==================================================
-
-firebaseConfig = {
-
-    "apiKey": "AIzaSyBfXbYCsa_deF1l4vJ8ZLsrySIOVTIJOys",
-
-    "authDomain": "smartsocialanalyticsplatform.firebaseapp.com",
-
-    "projectId": "smartsocialanalyticsplatform",
-
-    "storageBucket": "smartsocialanalyticsplatform.firebasestorage.app",
-
-    "messagingSenderId": "133288767996",
-
-    "appId": "1:133288767996:web:b93160f083eab4b54f0279",
-
-    "databaseURL":
-    "https://smartsocialanalyticsplatform-default-rtdb.firebaseio.com/"
-
-}
+FIREBASE_WEB_API_KEY = "PASTE_YOUR_FIREBASE_WEB_API_KEY_HERE"
 
 
+# ============================================================
+# FIREBASE AUTH URLS
+# ============================================================
 
-# Initialize Firebase
+SIGN_UP_URL = (
+    "https://identitytoolkit.googleapis.com/v1/accounts:signUp"
+    "?key=" + FIREBASE_WEB_API_KEY
+)
 
-firebase = pyrebase.initialize_app(firebaseConfig)
+SIGN_IN_URL = (
+    "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+    "?key=" + FIREBASE_WEB_API_KEY
+)
+
+PASSWORD_RESET_URL = (
+    "https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode"
+    "?key=" + FIREBASE_WEB_API_KEY
+)
+
+LOOKUP_URL = (
+    "https://identitytoolkit.googleapis.com/v1/accounts:lookup"
+    "?key=" + FIREBASE_WEB_API_KEY
+)
 
 
-auth = firebase.auth()
+# ============================================================
+# FIREBASE ERROR HANDLER
+# ============================================================
 
+def firebase_error_message(error_code):
 
+    errors = {
 
-# ==================================================
-# LOGIN FUNCTION
-# ==================================================
+        "EMAIL_EXISTS":
+            "An account with this email already exists.",
 
-def login():
+        "EMAIL_NOT_FOUND":
+            "No account was found with this email address.",
 
+        "INVALID_PASSWORD":
+            "Incorrect password.",
 
-    st.subheader(
-        "🔐 Welcome Back"
+        "INVALID_LOGIN_CREDENTIALS":
+            "Incorrect email or password.",
+
+        "USER_DISABLED":
+            "This account has been disabled.",
+
+        "INVALID_EMAIL":
+            "Please enter a valid email address.",
+
+        "WEAK_PASSWORD":
+            "Password must be at least 6 characters long.",
+
+        "OPERATION_NOT_ALLOWED":
+            "Email/password authentication is not enabled in Firebase.",
+
+        "TOO_MANY_ATTEMPTS_TRY_LATER":
+            "Too many attempts. Please try again later.",
+
+        "INVALID_ID_TOKEN":
+            "Your session has expired. Please log in again.",
+
+        "USER_NOT_FOUND":
+            "User account not found."
+
+    }
+
+    return errors.get(
+        error_code,
+        "Authentication error. Please try again."
     )
 
 
-    st.markdown(
-    """
-    ### Smart Social Analytics Platform
+# ============================================================
+# GET USER INFORMATION FROM FIREBASE DATABASE
+# ============================================================
 
-    Login to access your AI-powered dashboard.
+def get_user_data(uid, email=None):
 
-    Features:
+    try:
 
-    ✅ Sentiment Analysis
+        # Change "users" to your existing Firebase collection/path
+        # if your project currently uses a different one.
+        user_ref = db.reference(f"users/{uid}")
 
-    ✅ Trend Prediction
+        user_data = user_ref.get()
 
-    ✅ Analytics Reports
+        if user_data:
 
-    ✅ Business Insights
-    """
-    )
+            return {
+                "uid": uid,
+                "email": email or user_data.get("email", ""),
+                "name": user_data.get("name", "User"),
+                "role": user_data.get("role", "User")
+            }
 
+        return {
+            "uid": uid,
+            "email": email or "",
+            "name": "User",
+            "role": "User"
+        }
 
-    st.divider()
+    except Exception:
 
+        return {
+            "uid": uid,
+            "email": email or "",
+            "name": "User",
+            "role": "User"
+        }
 
 
-    with st.form(
-        "login_form"
-    ):
-
-
-        email = st.text_input(
-
-            "📧 Email Address"
-
-        )
-
-
-        password = st.text_input(
-
-            "🔑 Password",
-
-            type="password"
-
-        )
-
-
-        submit = st.form_submit_button(
-
-            "🚀 Login",
-
-            use_container_width=True
-
-        )
-
-
-
-    if submit:
-
-
-        if not email or not password:
-
-
-            st.warning(
-
-                "Please enter email and password."
-
-            )
-
-            return
-
-
-
-        try:
-
-
-            user = auth.sign_in_with_email_and_password(
-
-                email.strip(),
-
-                password
-
-            )
-
-
-
-            user_id = user["localId"]
-
-
-
-            user_doc = db.collection(
-                "users"
-            ).document(
-                user_id
-            ).get()
-
-
-
-            if user_doc.exists:
-
-
-                user_data = user_doc.to_dict()
-
-
-
-                # Create session
-
-
-                st.session_state["logged_in"] = True
-
-
-
-                st.session_state["user"] = {
-
-
-                    "uid": user_id,
-
-
-                    "name": user_data["name"],
-
-
-                    "email": user_data["email"],
-
-
-                    "role": user_data["role"]
-
-
-                }
-
-
-
-                st.session_state[
-                    "redirect_dashboard"
-                ] = True
-
-
-
-                st.success(
-
-                    f"Welcome {user_data['name']} 👋"
-
-                )
-
-
-
-                st.rerun()
-
-
-
-            else:
-
-
-                st.error(
-
-                    "User profile not found."
-
-                )
-
-
-
-        except Exception as e:
-
-
-
-            st.error(
-
-                "Invalid email or password."
-
-            )
-
-
-
-# ==================================================
-# REGISTER FUNCTION
-# ==================================================
+# ============================================================
+# REGISTER
+# ============================================================
 
 def register():
 
+    st.subheader("📝 Create an Account")
 
-    st.subheader(
-
-        "📝 Create Your Account"
-
+    name = st.text_input(
+        "Full Name",
+        placeholder="Enter your full name",
+        key="register_name"
     )
 
-
-
-    st.markdown(
-
-    """
-    Join Smart Social Analytics Platform
-
-    Get access to:
-
-    🤖 AI Sentiment Detection
-
-    📈 Trend Forecasting
-
-    📊 Analytics Dashboard
-
-    🔥 Smart Business Insights
-
-    """
-
+    email = st.text_input(
+        "Email Address",
+        placeholder="Enter your email",
+        key="register_email"
     )
 
+    password = st.text_input(
+        "Password",
+        type="password",
+        placeholder="Create a password",
+        key="register_password"
+    )
 
+    confirm_password = st.text_input(
+        "Confirm Password",
+        type="password",
+        placeholder="Confirm your password",
+        key="register_confirm_password"
+    )
 
-    st.divider()
+    st.caption(
+        "Your password must contain at least 6 characters."
+    )
 
-
-
-    with st.form(
-
-        "register_form"
-
+    if st.button(
+        "📝 Create Account",
+        use_container_width=True,
+        type="primary"
     ):
 
+        # ----------------------------------------------------
+        # Validation
+        # ----------------------------------------------------
 
-        name = st.text_input(
+        if not name.strip():
 
-            "👤 Full Name"
-
-        )
-
-
-        email = st.text_input(
-
-            "📧 Email Address"
-
-        )
-
-
-        password = st.text_input(
-
-            "🔑 Password",
-
-            type="password"
-
-        )
-
-
-
-        role = st.selectbox(
-
-            "Account Role",
-
-            [
-
-                "User",
-
-                "Admin"
-
-            ]
-
-        )
-
-
-
-        submit = st.form_submit_button(
-
-            "Create Account",
-
-            use_container_width=True
-
-        )
-
-
-
-    if submit:
-
-
-
-        if not name or not email or not password:
-
-
-            st.warning(
-
-                "Please complete all fields."
-
-            )
-
+            st.error("Please enter your name.")
             return
 
+        if not email.strip():
 
+            st.error("Please enter your email address.")
+            return
+
+        if not password:
+
+            st.error("Please enter a password.")
+            return
+
+        if len(password) < 6:
+
+            st.error(
+                "Password must contain at least 6 characters."
+            )
+            return
+
+        if password != confirm_password:
+
+            st.error("Passwords do not match.")
+            return
+
+        # ----------------------------------------------------
+        # Create Firebase Authentication account
+        # ----------------------------------------------------
 
         try:
 
-
-
-            # Create Firebase account
-
-
-            user = auth.create_user_with_email_and_password(
-
-                email.strip(),
-
-                password
-
+            response = requests.post(
+                SIGN_UP_URL,
+                json={
+                    "email": email.strip(),
+                    "password": password,
+                    "returnSecureToken": True
+                },
+                timeout=15
             )
 
+            data = response.json()
 
+            if response.status_code != 200:
 
-            user_id = user["localId"]
+                error_code = (
+                    data
+                    .get("error", {})
+                    .get("message", "UNKNOWN_ERROR")
+                )
 
+                st.error(
+                    firebase_error_message(error_code)
+                )
 
+                return
 
+            uid = data["localId"]
+            id_token = data["idToken"]
 
-            # Save Firestore profile
+            # ------------------------------------------------
+            # Store additional user information
+            # ------------------------------------------------
 
-
-            db.collection(
-
-                "users"
-
-            ).document(
-
-                user_id
-
-            ).set(
-
-            {
-
-
-                "name": name,
-
-
+            user_data = {
+                "uid": uid,
+                "name": name.strip(),
                 "email": email.strip(),
-
-
-                "role": role,
-
-
-                "created_at": datetime.now()
-
-
+                "role": "User"
             }
 
+            db.reference(
+                f"users/{uid}"
+            ).set(user_data)
+
+            # ------------------------------------------------
+            # Send email verification
+            # ------------------------------------------------
+
+            verify_url = (
+                "https://identitytoolkit.googleapis.com/v1/"
+                "accounts:sendOobCode"
+                "?key=" + FIREBASE_WEB_API_KEY
             )
 
-
-
-            st.success(
-
-                "🎉 Account created successfully!"
-
+            verify_response = requests.post(
+                verify_url,
+                json={
+                    "requestType": "VERIFY_EMAIL",
+                    "idToken": id_token
+                },
+                timeout=15
             )
 
+            if verify_response.status_code == 200:
 
-            st.info(
-
-                "Please login using your new account."
-
-            )
-
-
-
-        except Exception as e:
-
-
-
-            error = str(e)
-
-
-
-            if "EMAIL_EXISTS" in error:
-
-
-                st.error(
-
-                    "This email is already registered."
-
+                st.success(
+                    "Account created successfully!"
                 )
 
-
-            elif "INVALID_EMAIL" in error:
-
-
-                st.error(
-
-                    "Please enter a valid email."
-
+                st.info(
+                    "📧 A verification email has been sent to "
+                    + email.strip()
+                    + ". Please verify your email before logging in."
                 )
-
 
             else:
 
-
-                st.error(
-
-                    "Registration failed."
-
+                st.success(
+                    "Account created successfully!"
                 )
 
-                st.write(error)
+                st.warning(
+                    "Your account was created, but the verification "
+                    "email could not be sent. You can try again later."
+                )
+
+        except requests.exceptions.RequestException:
+
+            st.error(
+                "Could not connect to Firebase. "
+                "Please check your internet connection."
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Registration error: {str(e)}"
+            )
+
+
+# ============================================================
+# LOGIN
+# ============================================================
+
+def login():
+
+    st.subheader("🔐 Login")
+
+    email = st.text_input(
+        "Email Address",
+        placeholder="Enter your email",
+        key="login_email"
+    )
+
+    password = st.text_input(
+        "Password",
+        type="password",
+        placeholder="Enter your password",
+        key="login_password"
+    )
+
+    if st.button(
+        "🔐 Login",
+        use_container_width=True,
+        type="primary"
+    ):
+
+        if not email.strip():
+
+            st.error("Please enter your email address.")
+            return
+
+        if not password:
+
+            st.error("Please enter your password.")
+            return
+
+        try:
+
+            # ------------------------------------------------
+            # Firebase email/password authentication
+            # ------------------------------------------------
+
+            response = requests.post(
+                SIGN_IN_URL,
+                json={
+                    "email": email.strip(),
+                    "password": password,
+                    "returnSecureToken": True
+                },
+                timeout=15
+            )
+
+            data = response.json()
+
+            if response.status_code != 200:
+
+                error_code = (
+                    data
+                    .get("error", {})
+                    .get("message", "UNKNOWN_ERROR")
+                )
+
+                st.error(
+                    firebase_error_message(error_code)
+                )
+
+                return
+
+            uid = data["localId"]
+            id_token = data["idToken"]
+            user_email = data.get(
+                "email",
+                email.strip()
+            )
+
+            # ------------------------------------------------
+            # Check email verification
+            # ------------------------------------------------
+
+            lookup_response = requests.post(
+                LOOKUP_URL,
+                json={
+                    "idToken": id_token
+                },
+                timeout=15
+            )
+
+            if lookup_response.status_code == 200:
+
+                lookup_data = lookup_response.json()
+
+                users = lookup_data.get("users", [])
+
+                if users:
+
+                    email_verified = users[0].get(
+                        "emailVerified",
+                        False
+                    )
+
+                    if not email_verified:
+
+                        st.warning(
+                            "📧 Please verify your email address "
+                            "before logging in."
+                        )
+
+                        st.info(
+                            "Check your email inbox for the Firebase "
+                            "verification email."
+                        )
+
+                        return
+
+            # ------------------------------------------------
+            # Get user data from Realtime Database
+            # ------------------------------------------------
+
+            user_data = get_user_data(
+                uid,
+                user_email
+            )
+
+            # ------------------------------------------------
+            # Session management
+            # ------------------------------------------------
+
+            st.session_state["logged_in"] = True
+
+            st.session_state["user"] = user_data
+
+            st.session_state["redirect_dashboard"] = True
+
+            st.success(
+                f"Welcome back, {user_data['name']}! 👋"
+            )
+
+            st.rerun()
+
+        except requests.exceptions.RequestException:
+
+            st.error(
+                "Could not connect to Firebase. "
+                "Please check your internet connection."
+            )
+
+        except Exception as e:
+
+            st.error(
+                f"Login error: {str(e)}"
+            )
+
+    # ========================================================
+    # FORGOT PASSWORD
+    # ========================================================
+
+    st.markdown("---")
+
+    if st.button(
+        "🔑 Forgot Password?",
+        use_container_width=True
+    ):
+
+        st.session_state["show_forgot_password"] = True
+
+    # ========================================================
+    # FORGOT PASSWORD FORM
+    # ========================================================
+
+    if st.session_state.get(
+        "show_forgot_password",
+        False
+    ):
+
+        st.markdown("---")
+
+        st.subheader("🔑 Reset Your Password")
+
+        reset_email = st.text_input(
+            "Enter your email address",
+            placeholder="your@email.com",
+            key="reset_email"
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            if st.button(
+                "📧 Send Reset Email",
+                use_container_width=True,
+                type="primary"
+            ):
+
+                if not reset_email.strip():
+
+                    st.error(
+                        "Please enter your email address."
+                    )
+
+                else:
+
+                    try:
+
+                        response = requests.post(
+                            PASSWORD_RESET_URL,
+                            json={
+                                "requestType": "PASSWORD_RESET",
+                                "email": reset_email.strip()
+                            },
+                            timeout=15
+                        )
+
+                        data = response.json()
+
+                        if response.status_code == 200:
+
+                            st.success(
+                                "📧 Password reset email sent!"
+                            )
+
+                            st.info(
+                                "Check your email inbox and follow "
+                                "the link to create a new password."
+                            )
+
+                        else:
+
+                            error_code = (
+                                data
+                                .get("error", {})
+                                .get(
+                                    "message",
+                                    "UNKNOWN_ERROR"
+                                )
+                            )
+
+                            st.error(
+                                firebase_error_message(
+                                    error_code
+                                )
+                            )
+
+                    except requests.exceptions.RequestException:
+
+                        st.error(
+                            "Could not connect to Firebase."
+                        )
+
+                    except Exception as e:
+
+                        st.error(
+                            f"Password reset error: {str(e)}"
+                        )
+
+        with col2:
+
+            if st.button(
+                "❌ Cancel",
+                use_container_width=True
+            ):
+
+                st.session_state[
+                    "show_forgot_password"
+                ] = False
+
+                st.rerun()
