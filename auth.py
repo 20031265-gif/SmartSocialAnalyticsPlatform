@@ -149,6 +149,16 @@ def register():
         key="register_name"
     )
 
+    # --------------------------------------------------------
+    # Role selection dropdown - ONLY User and Admin
+    # --------------------------------------------------------
+    role = st.selectbox(
+        "Select Your Role",
+        options=["User", "Admin"],  # <--- ONLY THESE TWO
+        index=0,  # Defaults to "User"
+        key="register_role"
+    )
+
     email = st.text_input(
         "Email Address",
         placeholder="Enter your email",
@@ -246,14 +256,14 @@ def register():
             id_token = data["idToken"]
 
             # ------------------------------------------------
-            # Store additional user information
+            # Store additional user information (INCLUDING ROLE)
             # ------------------------------------------------
 
             user_data = {
                 "uid": uid,
                 "name": name.strip(),
                 "email": email.strip(),
-                "role": "User"
+                "role": role  # <--- Saves "User" or "Admin"
             }
 
             db.reference(
