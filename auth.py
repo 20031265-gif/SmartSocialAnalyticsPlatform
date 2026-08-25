@@ -18,7 +18,7 @@ from firebase_config import db
 # IMPORTANT:
 # This is NOT the private_key from firebase_key.json.
 
-FIREBASE_WEB_API_KEY = "PASTE_YOUR_FIREBASE_WEB_API_KEY_HERE"
+FIREBASE_WEB_API_KEY = "AIzaSyBfXbYCsa_deF1l4vJ8ZLsrySIOVTIJOys"
 
 
 # ============================================================
